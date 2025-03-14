@@ -3,7 +3,8 @@
 import { useJohari } from './JohariProvider'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { InfoIcon, HelpCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { InfoIcon, HelpCircle, Eye } from 'lucide-react'
 import { useState } from 'react'
 import {
     Select,
@@ -108,9 +109,12 @@ const QUADRANT_TIPS = {
     }
 }
 
-export function JohariInputForm() {
+export function JohariInputForm({ onDataEntered }: { onDataEntered?: () => void }) {
     const { johariData, updateJohariData } = useJohari()
     const [selectedProfile, setSelectedProfile] = useState<string>("")
+
+    // Check if all fields have content
+    const allFieldsHaveContent = Object.values(johariData).every(value => value.trim() !== '')
 
     const handleChange = (field: keyof typeof johariData, value: string) => {
         updateJohariData(field, value)
@@ -234,6 +238,21 @@ export function JohariInputForm() {
                     Add multiple items in each quadrant, separated by commas. For best results, be specific and honest in your reflections.
                 </p>
             </div>
+
+            {/* View in 3D button that only appears when all fields have content */}
+            {allFieldsHaveContent && (
+                <div className="mt-6 flex justify-center starting:opacity-0 animate-fade-in">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDataEntered?.()}
+                        className="group flex items-center gap-2 bg-(--color-background/50) hover:bg-(--color-primary) hover:text-white transition-all"
+                    >
+                        <Eye className="h-4 w-4 text-(--color-primary) group-hover:text-white" />
+                        <span>View in 3D</span>
+                    </Button>
+                </div>
+            )}
         </div>
     )
 }
