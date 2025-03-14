@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/c
 import { useState, useEffect, ReactNode } from 'react'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import { Copy, Check } from 'lucide-react'
 import {
     BarChart,
     Bar,
@@ -52,6 +53,7 @@ interface ChartData {
 export function JohariAnalysis() {
     const { johariData, analysis, setAnalysis } = useJohari()
     const [chartData, setChartData] = useState<ChartData | null>(null)
+    const [isCopied, setIsCopied] = useState<boolean>(false)
 
     // Use the useChat hook to handle streaming
     const { messages, append, isLoading, error, setMessages } = useChat({
@@ -69,6 +71,25 @@ export function JohariAnalysis() {
     const currentAnalysis = messages
         .filter(message => message.role === 'assistant')
         .pop()?.content || analysis
+
+    // Copy analysis to clipboard
+    const handleCopyToClipboard = async (): Promise<void> => {
+        if (!currentAnalysis) return;
+
+        try {
+            // Remove the chart data before copying
+            const contentWithoutChart = currentAnalysis.replace(/```chart[\s\S]*?```/g, '')
+            await navigator.clipboard.writeText(contentWithoutChart);
+            setIsCopied(true);
+
+            // Reset copy status after 2 seconds
+            setTimeout(() => {
+                setIsCopied(false);
+            }, 2000);
+        } catch (error) {
+            console.error('Failed to copy:', error);
+        }
+    };
 
     // Extract chart data from the markdown content
     const extractChartData = (content: string): void => {
@@ -122,61 +143,75 @@ export function JohariAnalysis() {
 
         // Create the prompt
         const prompt = `
-      As a leadership coach for school principals in the Philippines, analyze this Johari Window data:
-      
-      Open Self (Known to self and others):
-      ${johariData.openSelf}
-      
-      Blind Self (Unknown to self, known to others):
-      ${johariData.blindSelf}
-      
-      Hidden Self (Known to self, unknown to others):
-      ${johariData.hiddenSelf}
-      
-      Unknown Self (Unknown to self and others):
-      ${johariData.unknownSelf}
-      
-      Based on this Johari Window data for a school leader in the Philippines:
-      1. Provide a brief assessment of their leadership profile
-      2. Identify key strengths and growth areas
-      3. Suggest specific and actionable steps to improve self-awareness
-      4. Recommend professional development priorities
-      5. Explain how this self-awareness can improve their effectiveness as a school leader
-      
-      Format your response with markdown including headings, bullet points, and numbered lists where appropriate.
-      
-      ALSO, please include visualization data for a chart that shows the balance between the 4 Johari window quadrants. 
-      
-      Include the chart data as JSON in the following format, placed between \`\`\`chart and \`\`\` markers:
-      
-      \`\`\`chart
-      {
-        "quadrantData": [
-          { "name": "Open Self", "value": 30 },
-          { "name": "Blind Self", "value": 20 },
-          { "name": "Hidden Self", "value": 25 },
-          { "name": "Unknown Self", "value": 25 }
-        ],
-        "strengthsWeaknesses": [
-          { "category": "Communication", "strength": 8, "growth": 4 },
-          { "category": "Vision", "strength": 7, "growth": 3 },
-          { "category": "Empathy", "strength": 6, "growth": 5 },
-          { "category": "Decision Making", "strength": 5, "growth": 6 },
-          { "category": "Conflict Resolution", "strength": 4, "growth": 7 }
-        ],
-        "leadershipRadar": [
-          { "attribute": "Strategic Thinking", "value": 7 },
-          { "attribute": "Team Building", "value": 8 },
-          { "attribute": "Communication", "value": 6 },
-          { "attribute": "Resource Management", "value": 5 },
-          { "attribute": "Instructional Leadership", "value": 9 },
-          { "attribute": "Change Management", "value": 4 }
-        ]
-      }
-      \`\`\`
-      
-      The values should reflect your analysis of the Johari window data. Use your best judgment to assign appropriate values.
-    `
+You are providing a confidential leadership assessment based on Johari Window data for a school principal in the Philippines. Output only the complete analysis with no introductory text or statements like "Here's an analysis..." or "Based on the data provided..."
+
+Analyze the following Johari Window data through the lens of educational leadership:
+
+OPEN SELF (Arena):
+${johariData.openSelf}
+
+BLIND SELF (Blind Spot):
+${johariData.blindSelf}
+
+HIDDEN SELF (Façade):
+${johariData.hiddenSelf}
+
+UNKNOWN SELF (Unknown Area):
+${johariData.unknownSelf}
+
+Your analysis should include:
+
+# Leadership Profile Assessment
+A concise assessment of the leadership style, strengths, and development areas based on patterns across all four quadrants.
+
+# Key Insights
+- How the balance between quadrants affects leadership effectiveness
+- Critical blind spots that may impact school management and relationships
+- Hidden strengths that should be leveraged more visibly
+- Potential areas for exploration in the unknown quadrant
+
+# Development Recommendations
+1. Three specific, actionable steps to expand the Open quadrant
+2. Two strategies to receive feedback about Blind spots
+3. One approach to appropriately share relevant Hidden attributes
+4. Professional development priorities aligned with Filipino educational context
+
+# Implementation Timeline
+A realistic timeframe for implementing these recommendations within the Philippine educational system.
+
+Format your response using markdown with appropriate headings, bullet points, and numbered lists.
+
+Include visualization data as JSON in this exact format:
+\`\`\`chart
+{
+  "quadrantData": [
+    { "name": "Open Self", "value": [numeric value] },
+    { "name": "Blind Self", "value": [numeric value] },
+    { "name": "Hidden Self", "value": [numeric value] },
+    { "name": "Unknown Self", "value": [numeric value] }
+  ],
+  "strengthsWeaknesses": [
+    { "category": "[leadership trait]", "strength": [0-10], "growth": [0-10] },
+    { "category": "[leadership trait]", "strength": [0-10], "growth": [0-10] },
+    { "category": "[leadership trait]", "strength": [0-10], "growth": [0-10] },
+    { "category": "[leadership trait]", "strength": [0-10], "growth": [0-10] },
+    { "category": "[leadership trait]", "strength": [0-10], "growth": [0-10] }
+  ],
+  "leadershipRadar": [
+    { "attribute": "Strategic Thinking", "value": [0-10] },
+    { "attribute": "Team Building", "value": [0-10] },
+    { "attribute": "Communication", "value": [0-10] },
+    { "attribute": "Resource Management", "value": [0-10] },
+    { "attribute": "Instructional Leadership", "value": [0-10] },
+    { "attribute": "Community Engagement", "value": [0-10] }
+  ]
+}
+\`\`\`
+
+Calculate the values based on your analysis of the Johari Window data. The "quadrantData" should reflect the relative development of each quadrant, with higher values indicating more developed areas. For "strengthsWeaknesses" and "leadershipRadar," use a scale of 0-10 where higher numbers indicate greater strength.
+
+Do not include any explanatory text about the charts or data structure.
+`
 
         // Send the prompt - this will automatically start streaming the response
         append({
@@ -344,6 +379,30 @@ export function JohariAnalysis() {
 
             <Card className="flex-1 overflow-auto">
                 <CardContent className="pt-3 px-6 pb-6">
+                    <div className="flex justify-end mb-4">
+                        {!isLoading && currentAnalysis && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="flex gap-2 items-center"
+                                onClick={handleCopyToClipboard}
+                                disabled={isCopied}
+                            >
+                                {isCopied ? (
+                                    <>
+                                        <Check className="h-4 w-4" />
+                                        <span>Copied</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="h-4 w-4" />
+                                        <span>Copy</span>
+                                    </>
+                                )}
+                            </Button>
+                        )}
+                    </div>
+
                     <div className="prose prose-lg prose-headings:font-bold prose-headings:text-black dark:prose-headings:text-white prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:my-3 prose-ul:list-disc prose-ol:list-decimal prose-li:my-1 prose-li:ml-4 max-w-none">
                         <article
                             className="markdown-content mt-0"
