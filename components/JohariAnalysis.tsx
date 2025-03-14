@@ -198,9 +198,11 @@ export function JohariAnalysis() {
 
         // Create the prompt with updates for new visualizations and chart explanations
         const prompt = `
-You are providing a confidential leadership assessment based on Johari Window data for a school principal in the Philippines. Output only the complete analysis with no introductory text or statements like "Here's an analysis..." or "Based on the data provided..."
+You are providing a confidential leadership assessment based on Johari Window data for a school principal in the Philippines. 
 
 IMPORTANT: Do not wrap your entire response in markdown triple backticks or any other markdown wrapper. The content itself should use markdown formatting for headings, lists, etc., but do not add any fences around the entire response.
+
+Output the complete analysis directly with no introductory text or statements like "Here's an analysis..." or "Based on the data provided..."
 
 Analyze the following Johari Window data through the lens of educational leadership:
 
@@ -239,7 +241,7 @@ A realistic timeframe for implementing these recommendations within the Philippi
 # Key Stakeholders for Feedback
 Identify 5-7 key stakeholders (both internal and external) who should be engaged to provide feedback about blind spots.
 
-Format your response using markdown with appropriate headings, bullet points, and numbered lists.
+Format your response using markdown for internal content organization with appropriate headings, bullet points, and numbered lists, but do not wrap the entire response in markdown code blocks or other delimiters.
 
 Include visualization data as JSON in this exact format:
 \`\`\`chart
@@ -327,7 +329,7 @@ Calculate the values based on your analysis of the Johari Window data. The "quad
 
 Create thoughtful, detailed explanations for each chart in the "chartExplanations" section that will help the school head understand the visualizations. These explanations should be educational in nature, context-specific to the Philippine educational system, and provide practical interpretations of the data. Each explanation should be 3-5 sentences in length.
 
-Do not include any explanatory text about the charts or data structure in the main analysis - all chart explanations should be contained within the chartExplanations object.
+FINAL REMINDER: Do not include any explanatory text about the charts or data structure in the main analysis, and do not wrap your response in markdown code blocks (such as \`\`\`markdown or \`\`\`). All chart explanations should be contained within the chartExplanations object.
 `
 
         // Send the prompt - this will automatically start streaming the response
@@ -343,8 +345,14 @@ Do not include any explanatory text about the charts or data structure in the ma
             // Remove the chart data from the content before displaying
             const contentWithoutChart = text.replace(/```chart[\s\S]*?```/g, '')
 
+            // Also remove any erroneous triple backtick markdown wrappers at the beginning and end
+            const cleanedContent = contentWithoutChart
+                .replace(/^```markdown\s*\n/g, '')
+                .replace(/^```\s*\n/g, '')
+                .replace(/\n```\s*$/g, '')
+
             // Use marked as a function with a type assertion to avoid TypeScript issues
-            const htmlString = marked(contentWithoutChart) as string
+            const htmlString = marked(cleanedContent) as string
 
             // Sanitize the HTML with DOMPurify
             const sanitizedHtml = DOMPurify.sanitize(htmlString, {
