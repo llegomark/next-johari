@@ -19,7 +19,7 @@ export async function POST(req: Request) {
 
         // Use Google's Gemini model with streaming
         const result = streamText({
-            model: google('gemini-2.0-flash'),
+            model: google('gemini-2.0-flash-lite'),
             messages,
             temperature: 1,
             topP: 0.95,
