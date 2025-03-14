@@ -64,7 +64,7 @@ export function JohariVisualization() {
             if (rendererRef.current.domElement && rendererRef.current.domElement.parentNode) {
                 try {
                     rendererRef.current.domElement.parentNode.removeChild(rendererRef.current.domElement)
-                } catch (e) {
+                } catch {
                     console.log("DOM element already removed")
                 }
             }
@@ -501,7 +501,7 @@ export function JohariVisualization() {
                 cleanup()
             }
         }
-    }, [johariData, isMobile]) // Re-create scene when data or mobile status changes
+    }, [johariData, isMobile, parsedData.blindSelf, parsedData.hiddenSelf, parsedData.openSelf, parsedData.unknownSelf]) // Re-create scene when data or mobile status changes
 
     // Reset camera position
     const resetCamera = () => {
