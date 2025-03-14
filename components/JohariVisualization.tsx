@@ -1,192 +1,662 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useJohari } from './JohariProvider'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { X, RotateCcw, MoveHorizontal, Maximize } from 'lucide-react'
 
+// Parser function to extract items from comma-separated string
+function parseItems(text: string): string[] {
+    if (!text) return []
+    return text.split(',')
+        .map(item => item.trim())
+        .filter(item => item.length > 0)
+}
 
 export function JohariVisualization() {
     const containerRef = useRef<HTMLDivElement>(null)
     const { johariData } = useJohari()
+    const isMobile = useIsMobile()
 
-    useEffect(() => {
-        if (!containerRef.current) return
+    // State for selected quadrant modal
+    const [selectedQuadrant, setSelectedQuadrant] = useState<string | null>(null)
+    const [quadrantTitle, setQuadrantTitle] = useState('')
+    const [quadrantItems, setQuadrantItems] = useState<string[]>([])
 
-        // Scene setup
-        const scene = new THREE.Scene()
-        scene.background = new THREE.Color(0xf5f5f5)
+    // Refs for Three.js objects
+    const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
+    const sceneRef = useRef<THREE.Scene | null>(null)
+    const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+    const frameIdRef = useRef<number | null>(null)
+    const controlsRef = useRef<OrbitControls | null>(null)
 
-        // Camera setup
-        const camera = new THREE.PerspectiveCamera(
-            75,
-            containerRef.current.clientWidth / containerRef.current.clientHeight,
-            0.1,
-            1000
-        )
-        camera.position.z = 5
+    // Window objects refs (for animation and interaction)
+    const windowRefs = useRef<{ [key: string]: THREE.Group }>({})
 
-        // Renderer setup
-        const renderer = new THREE.WebGLRenderer({ antialias: true })
-        renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight)
-        containerRef.current.innerHTML = ''
-        containerRef.current.appendChild(renderer.domElement)
+    // Parse all items for display
+    const parsedData = {
+        openSelf: parseItems(johariData.openSelf),
+        blindSelf: parseItems(johariData.blindSelf),
+        hiddenSelf: parseItems(johariData.hiddenSelf),
+        unknownSelf: parseItems(johariData.unknownSelf)
+    }
 
-        // Controls
-        const controls = new OrbitControls(camera, renderer.domElement)
-        controls.enableDamping = true
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
-        scene.add(ambientLight)
-
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-        directionalLight.position.set(1, 1, 1)
-        scene.add(directionalLight)
-
-        // Create the Johari Window 3D visualization
-        const cubeSize = 2
-        const spacing = 0.1
-        const halfSize = cubeSize / 2
-
-        // Function to calculate cube size based on content length
-        const calculateSize = (text: string) => {
-            const baseSize = 0.5
-            const maxSize = 1.0
-            const contentLength = text.length
-
-            if (contentLength === 0) return baseSize
-            return Math.min(baseSize + contentLength / 200, maxSize)
+    // Clean up function to properly dispose of Three.js resources
+    const cleanup = () => {
+        if (frameIdRef.current !== null) {
+            cancelAnimationFrame(frameIdRef.current)
+            frameIdRef.current = null
         }
 
-        // Create cubes for each quadrant
-        const openGeometry = new THREE.BoxGeometry(
-            calculateSize(johariData.openSelf),
-            calculateSize(johariData.openSelf),
-            calculateSize(johariData.openSelf)
-        )
-        const openMaterial = new THREE.MeshStandardMaterial({ color: 0x4285f4, transparent: true, opacity: 0.8 })
-        const openCube = new THREE.Mesh(openGeometry, openMaterial)
-        openCube.position.set(-halfSize - spacing / 2, halfSize + spacing / 2, 0)
-        scene.add(openCube)
+        if (controlsRef.current) {
+            controlsRef.current.dispose()
+            controlsRef.current = null
+        }
 
-        const blindGeometry = new THREE.BoxGeometry(
-            calculateSize(johariData.blindSelf),
-            calculateSize(johariData.blindSelf),
-            calculateSize(johariData.blindSelf)
-        )
-        const blindMaterial = new THREE.MeshStandardMaterial({ color: 0xea4335, transparent: true, opacity: 0.8 })
-        const blindCube = new THREE.Mesh(blindGeometry, blindMaterial)
-        blindCube.position.set(halfSize + spacing / 2, halfSize + spacing / 2, 0)
-        scene.add(blindCube)
+        if (rendererRef.current) {
+            // Remove the renderer's DOM element safely
+            if (rendererRef.current.domElement && rendererRef.current.domElement.parentNode) {
+                try {
+                    rendererRef.current.domElement.parentNode.removeChild(rendererRef.current.domElement)
+                } catch (e) {
+                    console.log("DOM element already removed")
+                }
+            }
+            rendererRef.current.dispose()
+            rendererRef.current = null
+        }
 
-        const hiddenGeometry = new THREE.BoxGeometry(
-            calculateSize(johariData.hiddenSelf),
-            calculateSize(johariData.hiddenSelf),
-            calculateSize(johariData.hiddenSelf)
-        )
-        const hiddenMaterial = new THREE.MeshStandardMaterial({ color: 0x34a853, transparent: true, opacity: 0.8 })
-        const hiddenCube = new THREE.Mesh(hiddenGeometry, hiddenMaterial)
-        hiddenCube.position.set(-halfSize - spacing / 2, -halfSize - spacing / 2, 0)
-        scene.add(hiddenCube)
+        if (sceneRef.current) {
+            // Dispose of all geometries and materials
+            sceneRef.current.traverse((object) => {
+                if (object instanceof THREE.Mesh) {
+                    if (object.geometry) {
+                        object.geometry.dispose()
+                    }
 
-        const unknownGeometry = new THREE.BoxGeometry(
-            calculateSize(johariData.unknownSelf),
-            calculateSize(johariData.unknownSelf),
-            calculateSize(johariData.unknownSelf)
-        )
-        const unknownMaterial = new THREE.MeshStandardMaterial({ color: 0xfbbc05, transparent: true, opacity: 0.8 })
-        const unknownCube = new THREE.Mesh(unknownGeometry, unknownMaterial)
-        unknownCube.position.set(halfSize + spacing / 2, -halfSize - spacing / 2, 0)
-        scene.add(unknownCube)
+                    if (object.material) {
+                        if (Array.isArray(object.material)) {
+                            object.material.forEach(material => material.dispose())
+                        } else {
+                            object.material.dispose()
+                        }
+                    }
+                }
+            })
+            // Clear the scene
+            while (sceneRef.current.children.length > 0) {
+                sceneRef.current.remove(sceneRef.current.children[0]);
+            }
+        }
 
-        // Add quadrant labels
-        const createLabel = (text: string, position: THREE.Vector3) => {
-            const canvas = document.createElement('canvas')
-            const context = canvas.getContext('2d')
-            canvas.width = 256
-            canvas.height = 128
+        // Clear references
+        windowRefs.current = {}
+    }
 
-            if (context) {
-                context.fillStyle = '#ffffff'
-                context.fillRect(0, 0, canvas.width, canvas.height)
-                context.fillStyle = '#000000'
-                context.font = '24px Arial'
-                context.textAlign = 'center'
-                context.textBaseline = 'middle'
-                context.fillText(text, canvas.width / 2, canvas.height / 2)
+    // Initialize Three.js scene and handle responsive layout
+    useEffect(() => {
+        let isActive = true; // Flag to prevent operations after component unmounts
+
+        // This function initializes or reinitializes the 3D scene
+        const initializeScene = () => {
+            if (!containerRef.current || !isActive) return
+
+            // Clean up existing scene first
+            cleanup()
+
+            // Initialize scene
+            const scene = new THREE.Scene()
+            sceneRef.current = scene
+            scene.background = new THREE.Color(0xf7f9fc)
+
+            // Camera setup - adjust for device
+            const aspect = containerRef.current.clientWidth / containerRef.current.clientHeight
+            const camera = new THREE.PerspectiveCamera(
+                isMobile ? 70 : 60,
+                aspect,
+                0.1,
+                1000
+            )
+            camera.position.z = isMobile ? 6 : 5
+            cameraRef.current = camera
+
+            // Renderer setup
+            const renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true,
+                powerPreference: 'high-performance'
+            })
+            rendererRef.current = renderer
+            renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight)
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)) // Limit for performance
+            renderer.shadowMap.enabled = true
+
+            // Safely clear container and append renderer
+            if (containerRef.current.firstChild) {
+                try {
+                    containerRef.current.innerHTML = ''
+                } catch (e) {
+                    console.error("Error clearing container", e)
+                }
             }
 
-            const texture = new THREE.CanvasTexture(canvas)
-            const material = new THREE.SpriteMaterial({ map: texture })
-            const sprite = new THREE.Sprite(material)
-            sprite.position.copy(position)
-            sprite.scale.set(1.5, 0.75, 1)
-            scene.add(sprite)
+            try {
+                containerRef.current.appendChild(renderer.domElement)
+            } catch (e) {
+                console.error("Error appending renderer", e)
+                return; // Exit if we can't append to prevent further errors
+            }
+
+            // Controls for interaction
+            const controls = new OrbitControls(camera, renderer.domElement)
+            controlsRef.current = controls
+            controls.enableDamping = true
+            controls.dampingFactor = 0.1
+            controls.maxDistance = 10
+            controls.minDistance = 3
+            controls.maxPolarAngle = Math.PI / 1.8 // Limit rotation to prevent disorientation
+
+            // Lighting for better visuals
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7)
+            scene.add(ambientLight)
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
+            directionalLight.position.set(5, 5, 5)
+            directionalLight.castShadow = true
+            directionalLight.shadow.mapSize.width = 1024
+            directionalLight.shadow.mapSize.height = 1024
+            scene.add(directionalLight)
+
+            // Create a window quadrant with items
+            const createWindow = (
+                key: string,
+                title: string,
+                position: [number, number, number],
+                color: string,
+                items: string[]
+            ) => {
+                // Scale for mobile
+                const scale = isMobile ? 0.8 : 1
+                const framePadding = isMobile ? 2.0 : 2.2
+
+                // Create group to hold all window elements
+                const group = new THREE.Group()
+                group.position.set(...position)
+                group.scale.set(scale, scale, scale)
+                group.userData = { key, title, items, isJohariWindow: true }
+
+                // Window frame
+                const frameGeometry = new THREE.BoxGeometry(framePadding, framePadding, 0.2)
+                const frameMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xf0f0f0,
+                    metalness: 0.1,
+                    roughness: 0.7
+                })
+                const frame = new THREE.Mesh(frameGeometry, frameMaterial)
+                frame.castShadow = true
+                frame.receiveShadow = true
+                group.add(frame)
+
+                // Window inner pane
+                const glassSize = framePadding - 0.2
+                const glassGeometry = new THREE.BoxGeometry(glassSize, glassSize, 0.1)
+                const glassMaterial = new THREE.MeshPhysicalMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.6,
+                    metalness: 0.2,
+                    roughness: 0.3,
+                    clearcoat: 1,
+                    clearcoatRoughness: 0.1
+                })
+                const glass = new THREE.Mesh(glassGeometry, glassMaterial)
+                glass.position.z = 0.06
+                glass.castShadow = true
+                glass.receiveShadow = true
+                glass.userData = { interactive: true, key, title, items }
+                group.add(glass)
+
+                // Window dividers
+                const dividerHGeometry = new THREE.BoxGeometry(framePadding, 0.08, 0.22)
+                const dividerH = new THREE.Mesh(dividerHGeometry, frameMaterial)
+                dividerH.position.y = 0
+                dividerH.position.z = 0.01
+                dividerH.castShadow = true
+                dividerH.receiveShadow = true
+                group.add(dividerH)
+
+                const dividerVGeometry = new THREE.BoxGeometry(0.08, framePadding, 0.22)
+                const dividerV = new THREE.Mesh(dividerVGeometry, frameMaterial)
+                dividerV.position.x = 0
+                dividerV.position.z = 0.01
+                dividerV.castShadow = true
+                dividerV.receiveShadow = true
+                group.add(dividerV)
+
+                // Create canvas for title text
+                const canvas = document.createElement('canvas')
+                canvas.width = 512
+                canvas.height = 512
+                const context = canvas.getContext('2d')
+
+                if (context) {
+                    // Clear background with slight transparency
+                    context.fillStyle = 'rgba(255, 255, 255, 0.9)'
+                    context.fillRect(0, 0, canvas.width, canvas.height)
+
+                    // Draw title
+                    context.font = 'bold 48px Arial'
+                    context.textAlign = 'center'
+                    context.textBaseline = 'middle'
+                    context.fillStyle = '#000000'
+                    context.fillText(title, canvas.width / 2, canvas.height / 2 - 30)
+
+                    // Draw item count
+                    context.font = '36px Arial'
+                    context.fillStyle = '#444444'
+                    const itemCount = items.length
+                    context.fillText(
+                        itemCount === 0 ? 'No items' :
+                            itemCount === 1 ? '1 item' :
+                                `${itemCount} items`,
+                        canvas.width / 2,
+                        canvas.height / 2 + 40
+                    )
+
+                    // Draw help text
+                    context.font = '28px Arial'
+                    context.fillStyle = '#777777'
+                    context.fillText(
+                        'Click to view details',
+                        canvas.width / 2,
+                        canvas.height / 2 + 100
+                    )
+                }
+
+                const texture = new THREE.CanvasTexture(canvas)
+                const labelMaterial = new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    opacity: 0.95,
+                    side: THREE.DoubleSide
+                })
+
+                const labelGeometry = new THREE.PlaneGeometry(1.8, 1.8)
+                const label = new THREE.Mesh(labelGeometry, labelMaterial)
+                label.position.z = 0.2
+                label.userData = { interactive: true, key, title, items }
+                group.add(label)
+
+                scene.add(group)
+
+                // Store reference for animation
+                windowRefs.current[key] = group
+
+                return group
+            }
+
+            // Create window quadrants with their items
+            createWindow('openSelf', 'Open Self', [-1.2, 1.2, 0], '#4285f4', parsedData.openSelf)
+            createWindow('blindSelf', 'Blind Self', [1.2, 1.2, 0], '#ea4335', parsedData.blindSelf)
+            createWindow('hiddenSelf', 'Hidden Self', [-1.2, -1.2, 0], '#34a853', parsedData.hiddenSelf)
+            createWindow('unknownSelf', 'Unknown Self', [1.2, -1.2, 0], '#fbbc05', parsedData.unknownSelf)
+
+            // Create label maker function
+            const createLabel = (text: string, position: THREE.Vector3, rotation: THREE.Euler | null = null) => {
+                const canvas = document.createElement('canvas')
+                canvas.width = 512
+                canvas.height = 128
+                const context = canvas.getContext('2d')
+
+                if (context) {
+                    context.fillStyle = 'rgba(245, 245, 245, 0.9)'
+                    context.fillRect(0, 0, canvas.width, canvas.height)
+                    context.font = 'bold 32px Arial'
+                    context.textAlign = 'center'
+                    context.textBaseline = 'middle'
+                    context.fillStyle = '#333333'
+                    context.fillText(text, canvas.width / 2, canvas.height / 2)
+                }
+
+                const texture = new THREE.CanvasTexture(canvas)
+                const material = new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                })
+
+                const labelSize = isMobile ? 2.5 : 3
+                const geometry = new THREE.PlaneGeometry(labelSize, labelSize * 0.25)
+                const mesh = new THREE.Mesh(geometry, material)
+
+                mesh.position.copy(position)
+                if (rotation) mesh.rotation.copy(rotation)
+
+                scene.add(mesh)
+            }
+
+            // Add labels for axes - adjust positions for mobile
+            const labelOffset = isMobile ? 2.5 : 3
+            createLabel('Known to Self', new THREE.Vector3(0, labelOffset, 0))
+            createLabel('Unknown to Self', new THREE.Vector3(0, -labelOffset, 0))
+            createLabel('Known to Others', new THREE.Vector3(-labelOffset, 0, 0), new THREE.Euler(0, 0, Math.PI / 2))
+            createLabel('Unknown to Others', new THREE.Vector3(labelOffset, 0, 0), new THREE.Euler(0, 0, Math.PI / 2))
+
+            // Add dividing lines
+            const lineColor = 0x444444
+            const lineWidth = isMobile ? 3 : 2
+
+            const lineMaterial = new THREE.LineBasicMaterial({
+                color: lineColor,
+                linewidth: lineWidth // Note: linewidth doesn't work consistently across GPUs
+            })
+
+            // Horizontal line
+            const horizontalPoints = []
+            horizontalPoints.push(new THREE.Vector3(-labelOffset, 0, 0))
+            horizontalPoints.push(new THREE.Vector3(labelOffset, 0, 0))
+            const horizontalGeometry = new THREE.BufferGeometry().setFromPoints(horizontalPoints)
+            const horizontalLine = new THREE.Line(horizontalGeometry, lineMaterial)
+            scene.add(horizontalLine)
+
+            // Vertical line
+            const verticalPoints = []
+            verticalPoints.push(new THREE.Vector3(0, -labelOffset, 0))
+            verticalPoints.push(new THREE.Vector3(0, labelOffset, 0))
+            const verticalGeometry = new THREE.BufferGeometry().setFromPoints(verticalPoints)
+            const verticalLine = new THREE.Line(verticalGeometry, lineMaterial)
+            scene.add(verticalLine)
+
+            // Add a simple grid for better depth perception
+            const gridHelper = new THREE.GridHelper(20, 20, 0x888888, 0xcccccc)
+            gridHelper.position.y = -3
+            scene.add(gridHelper)
+
+            // Setup raycaster for mouse interaction
+            const raycaster = new THREE.Raycaster()
+            const mouse = new THREE.Vector2()
+
+            // Handle click events
+            const handleClick = (event: MouseEvent) => {
+                // Only process clicks if component is active
+                if (!isActive || !rendererRef.current) return
+
+                // Calculate mouse position in normalized device coordinates
+                const rect = rendererRef.current.domElement.getBoundingClientRect()
+                mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+                mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+
+                // Update the picking ray
+                if (cameraRef.current) {
+                    raycaster.setFromCamera(mouse, cameraRef.current)
+
+                    // Find intersections
+                    const intersects = raycaster.intersectObjects(scene.children, true)
+
+                    // Check if we clicked on a window
+                    for (let i = 0; i < intersects.length; i++) {
+                        const object = intersects[i].object
+
+                        // Check if clicked object or its parent is a Johari window
+                        if (object.userData?.interactive ||
+                            (object.parent && object.parent.userData?.isJohariWindow)) {
+
+                            // Get the data from the object or its parent
+                            const data = object.userData?.interactive ? object.userData : object.parent?.userData
+
+                            if (data && data.key) {
+                                // Set the selected quadrant and its data
+                                setSelectedQuadrant(data.key)
+                                setQuadrantTitle(data.title)
+                                setQuadrantItems(data.items)
+                                return
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Only add event listener if we successfully created the renderer
+            if (rendererRef.current && rendererRef.current.domElement) {
+                rendererRef.current.domElement.addEventListener('click', handleClick)
+            }
+
+            // Animation loop
+            const animate = () => {
+                if (!isActive || !sceneRef.current || !rendererRef.current || !cameraRef.current) return
+
+                frameIdRef.current = requestAnimationFrame(animate)
+
+                // Update controls
+                if (controlsRef.current) controlsRef.current.update()
+
+                // Animate windows
+                const time = Date.now() * 0.0005
+                const amplitude = 0.03
+
+                Object.entries(windowRefs.current).forEach(([key, window], index) => {
+                    // Get original position
+                    const baseY = key.includes('Self') && key.includes('open') || key.includes('blind') ? 1.2 : -1.2
+
+                    // Apply gentle floating animation
+                    window.position.y = baseY + Math.sin(time + index * 1.5) * amplitude
+                })
+
+                // Render scene
+                rendererRef.current.render(sceneRef.current, cameraRef.current)
+            }
+
+            // Start animation
+            animate()
+
+            // Return cleanup function
+            return () => {
+                // Remove event listener
+                if (rendererRef.current && rendererRef.current.domElement) {
+                    rendererRef.current.domElement.removeEventListener('click', handleClick)
+                }
+                cleanup()
+            }
         }
 
-        createLabel('Open Self', new THREE.Vector3(-halfSize - spacing / 2, halfSize + spacing / 2, 1.5))
-        createLabel('Blind Self', new THREE.Vector3(halfSize + spacing / 2, halfSize + spacing / 2, 1.5))
-        createLabel('Hidden Self', new THREE.Vector3(-halfSize - spacing / 2, -halfSize - spacing / 2, 1.5))
-        createLabel('Unknown Self', new THREE.Vector3(halfSize + spacing / 2, -halfSize - spacing / 2, 1.5))
+        // Initialize the scene
+        const cleanupFn = initializeScene()
 
-        // Add grid for reference
-        const gridHelper = new THREE.GridHelper(10, 10)
-        gridHelper.position.y = -2
-        scene.add(gridHelper)
-
-        // Animation loop
-        const animate = () => {
-            requestAnimationFrame(animate)
-            controls.update()
-
-            // Gentle rotation
-            openCube.rotation.y += 0.003
-            blindCube.rotation.y += 0.003
-            hiddenCube.rotation.y += 0.003
-            unknownCube.rotation.y += 0.003
-
-            renderer.render(scene, camera)
-        }
-        animate()
-
-        // Handle window resize
+        // Handle window resize with debounce
+        let resizeTimeout: NodeJS.Timeout | null = null
         const handleResize = () => {
-            if (!containerRef.current) return
-            camera.aspect = containerRef.current.clientWidth / containerRef.current.clientHeight
-            camera.updateProjectionMatrix()
-            renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight)
+            if (resizeTimeout) clearTimeout(resizeTimeout)
+
+            resizeTimeout = setTimeout(() => {
+                if (!containerRef.current || !cameraRef.current || !rendererRef.current) return
+
+                const width = containerRef.current.clientWidth
+                const height = containerRef.current.clientHeight
+
+                cameraRef.current.aspect = width / height
+                cameraRef.current.updateProjectionMatrix()
+
+                rendererRef.current.setSize(width, height)
+            }, 100) // Debounce resize events
         }
 
         window.addEventListener('resize', handleResize)
 
-        // Cleanup
+        // Clean up on unmount
         return () => {
+            isActive = false // Mark component as inactive
+
+            if (resizeTimeout) clearTimeout(resizeTimeout)
             window.removeEventListener('resize', handleResize)
-            controls.dispose()
-            renderer.dispose()
+
+            if (typeof cleanupFn === 'function') {
+                cleanupFn()
+            } else {
+                cleanup()
+            }
         }
-    }, [johariData])
+    }, [johariData, isMobile]) // Re-create scene when data or mobile status changes
+
+    // Reset camera position
+    const resetCamera = () => {
+        if (cameraRef.current && controlsRef.current) {
+            // Animation parameters
+            const duration = 1000 // ms
+            const startTime = Date.now()
+            const startPosition = cameraRef.current.position.clone()
+            const targetPosition = new THREE.Vector3(0, 0, isMobile ? 6 : 5)
+
+            // Animation function
+            const animateReset = () => {
+                const elapsedTime = Date.now() - startTime
+                const progress = Math.min(elapsedTime / duration, 1)
+
+                // Ease function (cubic ease-out)
+                const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+                const easedProgress = easeOutCubic(progress)
+
+                // Interpolate camera position
+                cameraRef.current!.position.lerpVectors(
+                    startPosition,
+                    targetPosition,
+                    easedProgress
+                )
+
+                // Continue animation if not complete
+                if (progress < 1) {
+                    requestAnimationFrame(animateReset)
+                } else {
+                    // Reset controls target
+                    controlsRef.current!.target.set(0, 0, 0)
+                    controlsRef.current!.update()
+                }
+            }
+
+            // Start animation
+            animateReset()
+        }
+    }
 
     return (
         <div className="flex flex-col h-full">
-            <h3 className="text-xl font-medium mb-4">Johari Window 3D Visualization</h3>
-            <div className="flex-1 min-h-[400px] bg-zinc-100 dark:bg-zinc-900 rounded-md" ref={containerRef}></div>
-            <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+                <h3 className="text-xl font-medium">Johari Window 3D Visualization</h3>
+
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={resetCamera}
+                        title="Reset view"
+                    >
+                        <RotateCcw className="h-4 w-4 mr-1" />
+                        <span className="hidden sm:inline">Reset View</span>
+                    </Button>
+                </div>
+            </div>
+
+            <div
+                className="relative flex-1 min-h-[350px] md:min-h-[500px] bg-slate-50 dark:bg-zinc-900 rounded-md overflow-hidden border"
+                ref={containerRef}
+            >
+                {/* Touch instructions for mobile */}
+                {isMobile && (
+                    <div className="absolute top-2 left-2 right-2 z-10 bg-black/50 text-white text-xs px-3 py-2 rounded-md backdrop-blur-sm pointer-events-none">
+                        <div className="flex items-center justify-center gap-2">
+                            <MoveHorizontal className="h-3 w-3" />
+                            <span>Drag to rotate</span>
+                            <Maximize className="h-3 w-3" />
+                            <span>Pinch to zoom</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Quadrant details modal */}
+            {selectedQuadrant && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4"
+                    onClick={() => setSelectedQuadrant(null)}
+                >
+                    <Card
+                        className="w-full max-w-md max-h-[80vh] shadow-lg"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <CardHeader className="pb-2">
+                            <div className="flex justify-between items-center">
+                                <CardTitle>{quadrantTitle}</CardTitle>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setSelectedQuadrant(null)}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <CardDescription>
+                                {quadrantTitle === 'Open Self' && 'Known to self and others'}
+                                {quadrantTitle === 'Blind Self' && 'Unknown to self, known to others'}
+                                {quadrantTitle === 'Hidden Self' && 'Known to self, unknown to others'}
+                                {quadrantTitle === 'Unknown Self' && 'Unknown to self and others'}
+                            </CardDescription>
+                        </CardHeader>
+
+                        <CardContent>
+                            <ScrollArea className="max-h-[50vh]">
+                                {quadrantItems.length === 0 ? (
+                                    <p className="text-muted-foreground italic text-sm">
+                                        No items have been added to this quadrant yet.
+                                    </p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                        {quadrantItems.map((item, index) => (
+                                            <Badge
+                                                key={index}
+                                                variant="secondary"
+                                                className="py-1 px-3"
+                                            >
+                                                {item}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
+                            </ScrollArea>
+                        </CardContent>
+
+                        <CardFooter className="flex justify-end pt-2">
+                            <Button
+                                variant="default"
+                                onClick={() => setSelectedQuadrant(null)}
+                            >
+                                Close
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
+            )}
+
+            {/* Quadrant color legend */}
+            <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:text-sm">
                 <div className="flex items-center">
-                    <div className="w-4 h-4 rounded-sm bg-[#4285f4] mr-2"></div>
+                    <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-sm bg-[#4285f4] mr-2"></div>
                     <span>Open Self</span>
                 </div>
                 <div className="flex items-center">
-                    <div className="w-4 h-4 rounded-sm bg-[#ea4335] mr-2"></div>
+                    <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-sm bg-[#ea4335] mr-2"></div>
                     <span>Blind Self</span>
                 </div>
                 <div className="flex items-center">
-                    <div className="w-4 h-4 rounded-sm bg-[#34a853] mr-2"></div>
+                    <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-sm bg-[#34a853] mr-2"></div>
                     <span>Hidden Self</span>
                 </div>
                 <div className="flex items-center">
-                    <div className="w-4 h-4 rounded-sm bg-[#fbbc05] mr-2"></div>
+                    <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-sm bg-[#fbbc05] mr-2"></div>
                     <span>Unknown Self</span>
                 </div>
             </div>

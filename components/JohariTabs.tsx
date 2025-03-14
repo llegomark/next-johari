@@ -5,30 +5,66 @@ import { JohariInputForm } from './JohariInputForm'
 import { JohariVisualization } from './JohariVisualization'
 import { JohariAnalysis } from './JohariAnalysis'
 import { Card } from '@/components/ui/card'
+import { useEffect, useState } from 'react'
+import { useJohari } from './JohariProvider'
 
 export function JohariTabs() {
+    const [activeTab, setActiveTab] = useState('input')
+    const { johariData } = useJohari()
+
+    // Force resize event after tab change to ensure proper 3D rendering
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            window.dispatchEvent(new Event('resize'))
+        }, 100)
+
+        return () => clearTimeout(timer)
+    }, [activeTab])
+
+    // Check if there's data to show
+    const hasData = Object.values(johariData).some(value => value.trim() !== '')
+
+    // Handle tab change to enforce data requirements
+    const handleTabChange = (value: string) => {
+        // Only allow switching to visualization or analysis if there's data
+        if ((value === 'visualization' || value === 'analysis') && !hasData) {
+            return
+        }
+        setActiveTab(value)
+    }
+
     return (
-        <Tabs defaultValue="input" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="input">Input Johari Data</TabsTrigger>
-                <TabsTrigger value="visualization">3D Visualization & Analysis</TabsTrigger>
+        <Tabs
+            value={activeTab}
+            onValueChange={handleTabChange}
+            className="w-full"
+        >
+            <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="input">Input Data</TabsTrigger>
+                <TabsTrigger value="visualization" disabled={!hasData}>3D View</TabsTrigger>
+                <TabsTrigger value="analysis" disabled={!hasData}>AI Analysis</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="input">
-                <Card className="p-6">
-                    <JohariInputForm />
+            <TabsContent value="input" className="mt-6">
+                <Card className="p-4 md:p-6">
+                    <JohariInputForm
+                        onDataEntered={() => setActiveTab('visualization')}
+                    />
                 </Card>
             </TabsContent>
 
-            <TabsContent value="visualization">
-                <Card className="p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="min-h-[400px] h-full">
-                            <JohariVisualization />
-                        </div>
-                        <div>
-                            <JohariAnalysis />
-                        </div>
+            <TabsContent value="visualization" className="mt-6">
+                <Card className="p-4 md:p-6">
+                    <div className="min-h-[500px] md:min-h-[600px] h-full">
+                        <JohariVisualization />
+                    </div>
+                </Card>
+            </TabsContent>
+
+            <TabsContent value="analysis" className="mt-6">
+                <Card className="p-4 md:p-6">
+                    <div className="min-h-[500px] md:min-h-[600px] h-full">
+                        <JohariAnalysis />
                     </div>
                 </Card>
             </TabsContent>
