@@ -35,6 +35,7 @@ export function JohariVisualization() {
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
     const frameIdRef = useRef<number | null>(null)
     const controlsRef = useRef<OrbitControls | null>(null)
+    const domElementRef = useRef<HTMLCanvasElement | null>(null) // To track the renderer's DOM element
 
     // Window objects refs (for animation and interaction)
     const windowRefs = useRef<{ [key: string]: THREE.Group }>({})
@@ -60,16 +61,17 @@ export function JohariVisualization() {
         }
 
         if (rendererRef.current) {
-            // Remove the renderer's DOM element safely
-            if (rendererRef.current.domElement && rendererRef.current.domElement.parentNode) {
+            // Only try to remove DOM element if it's still attached to the container
+            if (domElementRef.current && containerRef.current && domElementRef.current.parentNode === containerRef.current) {
                 try {
-                    rendererRef.current.domElement.parentNode.removeChild(rendererRef.current.domElement)
-                } catch {
-                    console.log("DOM element already removed")
+                    containerRef.current.removeChild(domElementRef.current)
+                } catch (err) {
+                    console.log("DOM element removal error:", err)
                 }
             }
             rendererRef.current.dispose()
             rendererRef.current = null
+            domElementRef.current = null
         }
 
         if (sceneRef.current) {
@@ -89,9 +91,11 @@ export function JohariVisualization() {
                     }
                 }
             })
-            // Clear the scene
+
+            // Clear the scene's children safely
             while (sceneRef.current.children.length > 0) {
-                sceneRef.current.remove(sceneRef.current.children[0]);
+                const child = sceneRef.current.children[0]
+                sceneRef.current.remove(child)
             }
         }
 
@@ -137,20 +141,17 @@ export function JohariVisualization() {
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)) // Limit for performance
             renderer.shadowMap.enabled = true
 
-            // Safely clear container and append renderer
-            if (containerRef.current.firstChild) {
-                try {
-                    containerRef.current.innerHTML = ''
-                } catch (e) {
-                    console.error("Error clearing container", e)
-                }
-            }
+            // IMPORTANT: Store a reference to the DOM element
+            domElementRef.current = renderer.domElement
 
-            try {
+            // Safely append renderer to container
+            if (containerRef.current) {
+                // First, safely remove any existing children
+                while (containerRef.current.firstChild) {
+                    containerRef.current.removeChild(containerRef.current.firstChild)
+                }
+                // Then append the new renderer
                 containerRef.current.appendChild(renderer.domElement)
-            } catch (e) {
-                console.error("Error appending renderer", e)
-                return; // Exit if we can't append to prevent further errors
             }
 
             // Controls for interaction
@@ -455,18 +456,17 @@ export function JohariVisualization() {
             // Start animation
             animate()
 
-            // Return cleanup function
+            // Return cleanup function for this specific initialization
             return () => {
                 // Remove event listener
                 if (rendererRef.current && rendererRef.current.domElement) {
                     rendererRef.current.domElement.removeEventListener('click', handleClick)
                 }
-                cleanup()
             }
         }
 
         // Initialize the scene
-        const cleanupFn = initializeScene()
+        const cleanupSpecificInit = initializeScene()
 
         // Handle window resize with debounce
         let resizeTimeout: NodeJS.Timeout | null = null
@@ -495,13 +495,15 @@ export function JohariVisualization() {
             if (resizeTimeout) clearTimeout(resizeTimeout)
             window.removeEventListener('resize', handleResize)
 
-            if (typeof cleanupFn === 'function') {
-                cleanupFn()
-            } else {
-                cleanup()
+            // Call specific cleanup from this initialization if it exists
+            if (typeof cleanupSpecificInit === 'function') {
+                cleanupSpecificInit()
             }
+
+            // Call the general cleanup function
+            cleanup()
         }
-    }, [johariData, isMobile, parsedData.blindSelf, parsedData.hiddenSelf, parsedData.openSelf, parsedData.unknownSelf]) // Re-create scene when data or mobile status changes
+    }, [johariData, isMobile]) // Only depend on johariData and isMobile
 
     // Reset camera position
     const resetCamera = () => {
