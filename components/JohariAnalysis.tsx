@@ -24,7 +24,12 @@ import {
     PolarGrid,
     PolarAngleAxis,
     PolarRadiusAxis,
-    Radar
+    Radar,
+    LineChart,
+    Line,
+    ScatterChart,
+    Scatter,
+    ZAxis
 } from 'recharts'
 
 // Define TypeScript interfaces for our chart data
@@ -44,10 +49,48 @@ interface LeadershipRadarItem {
     value: number;
 }
 
+// New interfaces for additional charts
+interface TimelineItem {
+    phase: string;
+    description: string;
+    start: number; // weeks from start
+    duration: number; // in weeks
+}
+
+interface QuadrantProjection {
+    quadrant: string;
+    current: number;
+    projected: number;
+}
+
+interface FeedbackStakeholder {
+    id: string;
+    name: string;
+    group: string; // e.g., "Internal", "External"
+    x: number; // position for scatter chart
+    y: number; // position for scatter chart
+    size: number; // importance/influence size
+}
+
+interface FeedbackConnection {
+    source: string;
+    target: string;
+    strength: number; // connection strength (1-10)
+}
+
+interface FeedbackNetwork {
+    stakeholders: FeedbackStakeholder[];
+    connections: FeedbackConnection[];
+}
+
+// Updated ChartData interface with new chart types
 interface ChartData {
     quadrantData?: QuadrantData[];
     strengthsWeaknesses?: StrengthWeakness[];
     leadershipRadar?: LeadershipRadarItem[];
+    timelineData?: TimelineItem[];
+    quadrantProjection?: QuadrantProjection[];
+    feedbackNetwork?: FeedbackNetwork;
 }
 
 export function JohariAnalysis() {
@@ -141,7 +184,7 @@ export function JohariAnalysis() {
         setMessages([])
         setChartData(null)
 
-        // Create the prompt
+        // Create the prompt with updates for new visualizations
         const prompt = `
 You are providing a confidential leadership assessment based on Johari Window data for a school principal in the Philippines. Output only the complete analysis with no introductory text or statements like "Here's an analysis..." or "Based on the data provided..."
 
@@ -177,7 +220,10 @@ A concise assessment of the leadership style, strengths, and development areas b
 4. Professional development priorities aligned with Filipino educational context
 
 # Implementation Timeline
-A realistic timeframe for implementing these recommendations within the Philippine educational system.
+A realistic timeframe for implementing these recommendations within the Philippine educational system, organized in phases.
+
+# Key Stakeholders for Feedback
+Identify 5-7 key stakeholders (both internal and external) who should be engaged to provide feedback about blind spots.
 
 Format your response using markdown with appropriate headings, bullet points, and numbered lists.
 
@@ -204,11 +250,40 @@ Include visualization data as JSON in this exact format:
     { "attribute": "Resource Management", "value": [0-10] },
     { "attribute": "Instructional Leadership", "value": [0-10] },
     { "attribute": "Community Engagement", "value": [0-10] }
-  ]
+  ],
+  "timelineData": [
+    { "phase": "Phase 1", "description": "[short description]", "start": [week number], "duration": [number of weeks] },
+    { "phase": "Phase 2", "description": "[short description]", "start": [week number], "duration": [number of weeks] },
+    { "phase": "Phase 3", "description": "[short description]", "start": [week number], "duration": [number of weeks] },
+    { "phase": "Phase 4", "description": "[short description]", "start": [week number], "duration": [number of weeks] }
+  ],
+  "quadrantProjection": [
+    { "quadrant": "Open Self", "current": [current value], "projected": [projected value] },
+    { "quadrant": "Blind Self", "current": [current value], "projected": [projected value] },
+    { "quadrant": "Hidden Self", "current": [current value], "projected": [projected value] },
+    { "quadrant": "Unknown Self", "current": [current value], "projected": [projected value] }
+  ],
+  "feedbackNetwork": {
+    "stakeholders": [
+      { "id": "principal", "name": "Principal", "group": "Self", "x": 50, "y": 50, "size": 10 },
+      { "id": "[stakeholder1]", "name": "[Stakeholder Name]", "group": "[Internal/External]", "x": [0-100], "y": [0-100], "size": [1-10] },
+      { "id": "[stakeholder2]", "name": "[Stakeholder Name]", "group": "[Internal/External]", "x": [0-100], "y": [0-100], "size": [1-10] },
+      { "id": "[stakeholder3]", "name": "[Stakeholder Name]", "group": "[Internal/External]", "x": [0-100], "y": [0-100], "size": [1-10] },
+      { "id": "[stakeholder4]", "name": "[Stakeholder Name]", "group": "[Internal/External]", "x": [0-100], "y": [0-100], "size": [1-10] },
+      { "id": "[stakeholder5]", "name": "[Stakeholder Name]", "group": "[Internal/External]", "x": [0-100], "y": [0-100], "size": [1-10] }
+    ],
+    "connections": [
+      { "source": "principal", "target": "[stakeholder1]", "strength": [1-10] },
+      { "source": "principal", "target": "[stakeholder2]", "strength": [1-10] },
+      { "source": "principal", "target": "[stakeholder3]", "strength": [1-10] },
+      { "source": "principal", "target": "[stakeholder4]", "strength": [1-10] },
+      { "source": "principal", "target": "[stakeholder5]", "strength": [1-10] }
+    ]
+  }
 }
 \`\`\`
 
-Calculate the values based on your analysis of the Johari Window data. The "quadrantData" should reflect the relative development of each quadrant, with higher values indicating more developed areas. For "strengthsWeaknesses" and "leadershipRadar," use a scale of 0-10 where higher numbers indicate greater strength.
+Calculate the values based on your analysis of the Johari Window data. The "quadrantData" should reflect the relative development of each quadrant, with higher values indicating more developed areas. For "strengthsWeaknesses" and "leadershipRadar," use a scale of 0-10 where higher numbers indicate greater strength. For the "quadrantProjection," estimate how the quadrant values might change after implementing your recommendations. For the "feedbackNetwork," position stakeholders based on their relationship to the principal (closer = stronger relationship) and size based on their importance for feedback.
 
 Do not include any explanatory text about the charts or data structure.
 `
@@ -250,6 +325,11 @@ Do not include any explanatory text about the charts or data structure.
         if (!chartData) return null
 
         const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d']
+        const GROUPS = {
+            'Self': '#FF8042',
+            'Internal': '#0088FE',
+            'External': '#00C49F'
+        }
 
         return (
             <div className="space-y-8 mt-6">
@@ -277,6 +357,29 @@ Do not include any explanatory text about the charts or data structure.
                                     </Pie>
                                     <Tooltip formatter={(value) => `${value}%`} />
                                 </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </Card>
+                )}
+
+                {/* Quadrant Improvement Projection - Grouped Bar Chart */}
+                {chartData.quadrantProjection && (
+                    <Card className="p-4">
+                        <CardTitle className="text-lg mb-4">Quadrant Improvement Projection</CardTitle>
+                        <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    data={chartData.quadrantProjection}
+                                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="quadrant" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="current" name="Current" fill="#8884d8" />
+                                    <Bar dataKey="projected" name="Projected" fill="#82ca9d" />
+                                </BarChart>
                             </ResponsiveContainer>
                         </div>
                     </Card>
@@ -318,6 +421,143 @@ Do not include any explanatory text about the charts or data structure.
                                     <Radar name="Leadership Skills" dataKey="value" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
                                     <Tooltip />
                                 </RadarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </Card>
+                )}
+
+                {/* Implementation Timeline - Gantt-style Chart */}
+                {chartData.timelineData && (
+                    <Card className="p-4">
+                        <CardTitle className="text-lg mb-4">Implementation Timeline</CardTitle>
+                        <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    layout="vertical"
+                                    data={chartData.timelineData}
+                                    margin={{ top: 20, right: 30, left: 120, bottom: 5 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis type="number" domain={[0, 'dataMax']} label={{ value: 'Weeks', position: 'insideBottom', offset: -5 }} />
+                                    <YAxis
+                                        type="category"
+                                        dataKey="phase"
+                                        width={100}
+                                        tickFormatter={(value) => {
+                                            return value.length > 15 ? value.substring(0, 15) + '...' : value;
+                                        }}
+                                    />
+                                    <Tooltip
+                                        formatter={(value, name, props) => {
+                                            if (name === 'start') return [`Start: Week ${value}`, name];
+                                            if (name === 'duration') return [`Duration: ${value} weeks`, name];
+                                            return [value, name];
+                                        }}
+                                        labelFormatter={(label) => {
+                                            const item = chartData.timelineData?.find(item => item.phase === label);
+                                            return `${label}: ${item?.description || ''}`;
+                                        }}
+                                    />
+                                    <Legend />
+                                    <Bar dataKey="duration" name="Duration" stackId="a" fill="#8884d8">
+                                        {chartData.timelineData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </Card>
+                )}
+
+                {/* Feedback Network Diagram - Scatter Chart */}
+                {chartData.feedbackNetwork && (
+                    <Card className="p-4">
+                        <CardTitle className="text-lg mb-4">Feedback Network Diagram</CardTitle>
+                        <div className="h-96">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <ScatterChart
+                                    margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                                >
+                                    <CartesianGrid />
+                                    <XAxis type="number" dataKey="x" name="Distance" domain={[0, 100]} hide />
+                                    <YAxis type="number" dataKey="y" name="Distance" domain={[0, 100]} hide />
+                                    <ZAxis type="number" dataKey="size" range={[40, 160]} />
+                                    <Tooltip
+                                        formatter={(value, name, props) => {
+                                            if (name === 'x' || name === 'y') return null;
+                                            if (name === 'size') return [`Influence: ${value}/10`, 'Influence'];
+                                            return [value, name];
+                                        }}
+                                        cursor={{ strokeDasharray: '3 3' }}
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                const data = payload[0].payload;
+                                                const connections = chartData.feedbackNetwork?.connections.filter(
+                                                    c => c.source === data.id || c.target === data.id
+                                                );
+
+                                                return (
+                                                    <div className="bg-white p-2 border border-gray-200 shadow-sm rounded-md">
+                                                        <p className="font-bold">{data.name}</p>
+                                                        <p>Group: {data.group}</p>
+                                                        <p>Influence: {data.size}/10</p>
+                                                        {connections && connections.map((conn, i) => {
+                                                            const targetId = conn.target === data.id ? conn.source : conn.target;
+                                                            const targetStakeholder = chartData.feedbackNetwork?.stakeholders.find(s => s.id === targetId);
+                                                            return (
+                                                                <p key={i} className="text-xs">
+                                                                    Connection to {targetStakeholder?.name}: {conn.strength}/10
+                                                                </p>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Legend />
+                                    {/* Draw connection lines */}
+                                    {chartData.feedbackNetwork.connections.map((connection, index) => {
+                                        const source = chartData.feedbackNetwork?.stakeholders.find(s => s.id === connection.source);
+                                        const target = chartData.feedbackNetwork?.stakeholders.find(s => s.id === connection.target);
+
+                                        if (!source || !target) return null;
+
+                                        const lineData = [
+                                            { x: source.x, y: source.y },
+                                            { x: target.x, y: target.y }
+                                        ];
+
+                                        return (
+                                            <Line
+                                                key={`connection-${index}`}
+                                                data={lineData}
+                                                type="linear"
+                                                dataKey="x"
+                                                stroke="#D3D3D3"
+                                                strokeWidth={connection.strength / 2}
+                                                dot={false}
+                                                activeDot={false}
+                                                isAnimationActive={false}
+                                            />
+                                        );
+                                    })}
+
+                                    {/* Group stakeholders by their group for the legend */}
+                                    {Array.from(new Set(chartData.feedbackNetwork.stakeholders.map(s => s.group))).map((group) => {
+                                        const groupStakeholders = chartData.feedbackNetwork?.stakeholders.filter(s => s.group === group) || [];
+                                        return (
+                                            <Scatter
+                                                key={`group-${group}`}
+                                                name={group}
+                                                data={groupStakeholders}
+                                                fill={GROUPS[group] || '#8884d8'}
+                                            />
+                                        );
+                                    })}
+                                </ScatterChart>
                             </ResponsiveContainer>
                         </div>
                     </Card>
