@@ -200,6 +200,8 @@ export function JohariAnalysis() {
         const prompt = `
 You are providing a confidential leadership assessment based on Johari Window data for a school principal in the Philippines. Output only the complete analysis with no introductory text or statements like "Here's an analysis..." or "Based on the data provided..."
 
+IMPORTANT: Do not wrap your entire response in markdown triple backticks or any other markdown wrapper. The content itself should use markdown formatting for headings, lists, etc., but do not add any fences around the entire response.
+
 Analyze the following Johari Window data through the lens of educational leadership:
 
 OPEN SELF (Arena):
@@ -399,6 +401,12 @@ Do not include any explanatory text about the charts or data structure in the ma
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
+                        {chartData.chartExplanations?.quadrantData && (
+                            <div className="mt-4 border-t pt-4">
+                                <h4 className="font-medium text-base">{chartData.chartExplanations.quadrantData.title}</h4>
+                                <p className="mt-2 text-sm text-muted-foreground">{chartData.chartExplanations.quadrantData.content}</p>
+                            </div>
+                        )}
                     </Card>
                 )}
 
@@ -422,6 +430,12 @@ Do not include any explanatory text about the charts or data structure in the ma
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
+                        {chartData.chartExplanations?.quadrantProjection && (
+                            <div className="mt-4 border-t pt-4">
+                                <h4 className="font-medium text-base">{chartData.chartExplanations.quadrantProjection.title}</h4>
+                                <p className="mt-2 text-sm text-muted-foreground">{chartData.chartExplanations.quadrantProjection.content}</p>
+                            </div>
+                        )}
                     </Card>
                 )}
 
@@ -445,6 +459,12 @@ Do not include any explanatory text about the charts or data structure in the ma
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
+                        {chartData.chartExplanations?.strengthsWeaknesses && (
+                            <div className="mt-4 border-t pt-4">
+                                <h4 className="font-medium text-base">{chartData.chartExplanations.strengthsWeaknesses.title}</h4>
+                                <p className="mt-2 text-sm text-muted-foreground">{chartData.chartExplanations.strengthsWeaknesses.content}</p>
+                            </div>
+                        )}
                     </Card>
                 )}
 
@@ -463,6 +483,12 @@ Do not include any explanatory text about the charts or data structure in the ma
                                 </RadarChart>
                             </ResponsiveContainer>
                         </div>
+                        {chartData.chartExplanations?.leadershipRadar && (
+                            <div className="mt-4 border-t pt-4">
+                                <h4 className="font-medium text-base">{chartData.chartExplanations.leadershipRadar.title}</h4>
+                                <p className="mt-2 text-sm text-muted-foreground">{chartData.chartExplanations.leadershipRadar.content}</p>
+                            </div>
+                        )}
                     </Card>
                 )}
 
@@ -507,6 +533,12 @@ Do not include any explanatory text about the charts or data structure in the ma
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
+                        {chartData.chartExplanations?.timelineData && (
+                            <div className="mt-4 border-t pt-4">
+                                <h4 className="font-medium text-base">{chartData.chartExplanations.timelineData.title}</h4>
+                                <p className="mt-2 text-sm text-muted-foreground">{chartData.chartExplanations.timelineData.content}</p>
+                            </div>
+                        )}
                     </Card>
                 )}
 
@@ -601,6 +633,12 @@ Do not include any explanatory text about the charts or data structure in the ma
                                 </ScatterChart>
                             </ResponsiveContainer>
                         </div>
+                        {chartData.chartExplanations?.feedbackNetwork && (
+                            <div className="mt-4 border-t pt-4">
+                                <h4 className="font-medium text-base">{chartData.chartExplanations.feedbackNetwork.title}</h4>
+                                <p className="mt-2 text-sm text-muted-foreground">{chartData.chartExplanations.feedbackNetwork.content}</p>
+                            </div>
+                        )}
                     </Card>
                 )}
             </div>
@@ -693,28 +731,6 @@ Do not include any explanatory text about the charts or data structure in the ma
 
                     {/* Render the charts with explanations below the text analysis */}
                     {renderCharts()}
-
-                    {/* Render chart explanations if available */}
-                    {chartData?.chartExplanations && (
-                        <div className="space-y-6 mt-8 mb-4">
-                            <h2 className="text-xl font-semibold">Chart Interpretations</h2>
-
-                            {Object.entries(chartData.chartExplanations).map(([chartType, explanation]) => {
-                                // Skip if no matching chart data exists
-                                const chartTypeKey = chartType as keyof ChartData;
-                                if (!chartData[chartTypeKey]) return null;
-
-                                return (
-                                    <Card key={chartType} className="p-4">
-                                        <CardTitle className="text-lg mb-2">{explanation.title}</CardTitle>
-                                        <CardContent className="pt-2 px-0">
-                                            <p>{explanation.content}</p>
-                                        </CardContent>
-                                    </Card>
-                                );
-                            })}
-                        </div>
-                    )}
 
                     {/* Only show the Generate New Analysis button when not loading */}
                     {!isLoading && (
