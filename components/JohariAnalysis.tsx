@@ -25,7 +25,6 @@ import {
     PolarAngleAxis,
     PolarRadiusAxis,
     Radar,
-    LineChart,
     Line,
     ScatterChart,
     Scatter,
@@ -83,7 +82,12 @@ interface FeedbackNetwork {
     connections: FeedbackConnection[];
 }
 
-// Updated ChartData interface with new chart types
+// Updated ChartData interface with new chart types and explanations
+interface ChartExplanation {
+    title: string;
+    content: string;
+}
+
 interface ChartData {
     quadrantData?: QuadrantData[];
     strengthsWeaknesses?: StrengthWeakness[];
@@ -91,6 +95,14 @@ interface ChartData {
     timelineData?: TimelineItem[];
     quadrantProjection?: QuadrantProjection[];
     feedbackNetwork?: FeedbackNetwork;
+    chartExplanations?: {
+        quadrantData?: ChartExplanation;
+        strengthsWeaknesses?: ChartExplanation;
+        leadershipRadar?: ChartExplanation;
+        timelineData?: ChartExplanation;
+        quadrantProjection?: ChartExplanation;
+        feedbackNetwork?: ChartExplanation;
+    };
 }
 
 export function JohariAnalysis() {
@@ -184,7 +196,7 @@ export function JohariAnalysis() {
         setMessages([])
         setChartData(null)
 
-        // Create the prompt with updates for new visualizations
+        // Create the prompt with updates for new visualizations and chart explanations
         const prompt = `
 You are providing a confidential leadership assessment based on Johari Window data for a school principal in the Philippines. Output only the complete analysis with no introductory text or statements like "Here's an analysis..." or "Based on the data provided..."
 
@@ -279,13 +291,41 @@ Include visualization data as JSON in this exact format:
       { "source": "principal", "target": "[stakeholder4]", "strength": [1-10] },
       { "source": "principal", "target": "[stakeholder5]", "strength": [1-10] }
     ]
+  },
+  "chartExplanations": {
+    "quadrantData": {
+      "title": "Understanding Your Johari Window Balance",
+      "content": "[Write a detailed explanation about what the quadrant balance shows, what the percentages mean, and specific insights about the principal's current distribution of self-awareness quadrants. Include 2-3 key takeaways.]"
+    },
+    "strengthsWeaknesses": {
+      "title": "Analyzing Your Strengths and Growth Areas",
+      "content": "[Provide an interpretation of the strengths vs. growth areas chart, explaining patterns, notable strengths, priority development areas, and how they connect to the Johari Window insights. Include 2-3 specific recommendations based on this data.]"
+    },
+    "leadershipRadar": {
+      "title": "Leadership Competency Profile",
+      "content": "[Explain the leadership radar chart, noting highest and lowest scoring areas, balance/imbalance patterns, and how these competencies connect to the principal's Johari Window data. Include 2-3 actionable insights for competency development.]"
+    },
+    "timelineData": {
+      "title": "Implementation Roadmap Breakdown",
+      "content": "[Provide a detailed explanation of the implementation timeline, including rationale for sequencing, critical path considerations, potential challenges during each phase, and adaptation strategies for the Philippine educational context.]"
+    },
+    "quadrantProjection": {
+      "title": "Your Growth Trajectory",
+      "content": "[Explain what the projected changes mean, which areas will see the most significant development, what improvements would look like in practice, and how this connects to career advancement in Philippine educational leadership.]"
+    },
+    "feedbackNetwork": {
+      "title": "Strategic Feedback Relationships",
+      "content": "[Explain the feedback network diagram, clarifying what the stakeholder positions, sizes and connections represent, which relationships are most critical for development, and specific strategies for engaging each stakeholder type for better feedback in the context of Philippine school leadership.]"
+    }
   }
 }
 \`\`\`
 
 Calculate the values based on your analysis of the Johari Window data. The "quadrantData" should reflect the relative development of each quadrant, with higher values indicating more developed areas. For "strengthsWeaknesses" and "leadershipRadar," use a scale of 0-10 where higher numbers indicate greater strength. For the "quadrantProjection," estimate how the quadrant values might change after implementing your recommendations. For the "feedbackNetwork," position stakeholders based on their relationship to the principal (closer = stronger relationship) and size based on their importance for feedback.
 
-Do not include any explanatory text about the charts or data structure.
+Create thoughtful, detailed explanations for each chart in the "chartExplanations" section that will help the school head understand the visualizations. These explanations should be educational in nature, context-specific to the Philippine educational system, and provide practical interpretations of the data. Each explanation should be 3-5 sentences in length.
+
+Do not include any explanatory text about the charts or data structure in the main analysis - all chart explanations should be contained within the chartExplanations object.
 `
 
         // Send the prompt - this will automatically start streaming the response
@@ -448,7 +488,7 @@ Do not include any explanatory text about the charts or data structure.
                                         }}
                                     />
                                     <Tooltip
-                                        formatter={(value, name, props) => {
+                                        formatter={(value, name) => {
                                             if (name === 'start') return [`Start: Week ${value}`, name];
                                             if (name === 'duration') return [`Duration: ${value} weeks`, name];
                                             return [value, name];
@@ -484,7 +524,7 @@ Do not include any explanatory text about the charts or data structure.
                                     <YAxis type="number" dataKey="y" name="Distance" domain={[0, 100]} hide />
                                     <ZAxis type="number" dataKey="size" range={[40, 160]} />
                                     <Tooltip
-                                        formatter={(value, name, props) => {
+                                        formatter={(value, name) => {
                                             if (name === 'x' || name === 'y') return null;
                                             if (name === 'size') return [`Influence: ${value}/10`, 'Influence'];
                                             return [value, name];
@@ -548,12 +588,13 @@ Do not include any explanatory text about the charts or data structure.
                                     {/* Group stakeholders by their group for the legend */}
                                     {Array.from(new Set(chartData.feedbackNetwork.stakeholders.map(s => s.group))).map((group) => {
                                         const groupStakeholders = chartData.feedbackNetwork?.stakeholders.filter(s => s.group === group) || [];
+                                        const groupColor = GROUPS[group as keyof typeof GROUPS] || '#8884d8';
                                         return (
                                             <Scatter
                                                 key={`group-${group}`}
                                                 name={group}
                                                 data={groupStakeholders}
-                                                fill={GROUPS[group] || '#8884d8'}
+                                                fill={groupColor}
                                             />
                                         );
                                     })}
@@ -650,8 +691,30 @@ Do not include any explanatory text about the charts or data structure.
                         />
                     </div>
 
-                    {/* Render the charts below the text analysis */}
+                    {/* Render the charts with explanations below the text analysis */}
                     {renderCharts()}
+
+                    {/* Render chart explanations if available */}
+                    {chartData?.chartExplanations && (
+                        <div className="space-y-6 mt-8 mb-4">
+                            <h2 className="text-xl font-semibold">Chart Interpretations</h2>
+
+                            {Object.entries(chartData.chartExplanations).map(([chartType, explanation]) => {
+                                // Skip if no matching chart data exists
+                                const chartTypeKey = chartType as keyof ChartData;
+                                if (!chartData[chartTypeKey]) return null;
+
+                                return (
+                                    <Card key={chartType} className="p-4">
+                                        <CardTitle className="text-lg mb-2">{explanation.title}</CardTitle>
+                                        <CardContent className="pt-2 px-0">
+                                            <p>{explanation.content}</p>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
+                        </div>
+                    )}
 
                     {/* Only show the Generate New Analysis button when not loading */}
                     {!isLoading && (

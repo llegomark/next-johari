@@ -21,8 +21,10 @@ export async function POST(req: Request) {
         const result = streamText({
             model: google('gemini-2.0-flash'),
             messages,
-            temperature: 0.7,
-            maxTokens: 2000,
+            temperature: 1,
+            topP: 0.95,
+            topK: 40,
+            maxTokens: 8192,
         })
 
         return result.toDataStreamResponse()
